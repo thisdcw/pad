@@ -1,0 +1,170 @@
+C51 COMPILER V9.57.0.0   RF_CTRL                                                           03/18/2024 15:31:20 PAGE 1   
+
+
+C51 COMPILER V9.57.0.0, COMPILATION OF MODULE RF_CTRL
+OBJECT MODULE PLACED IN .\Objects\rf_ctrl.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE Source\rf_ctrl.c OMF2 OPTIMIZE(8,SPEED) BROWSE INCDIR(.\Inc) DEBUG PRINT
+                    -(.\Listings\rf_ctrl.lst) OBJECT(.\Objects\rf_ctrl.obj)
+
+line level    source
+
+   1          
+   2          #include "rf_ctrl.h"
+   3          #include "timer.h"
+   4          #include "bz.h"
+   5          #include "Adc_C51.h"
+   6          #include "GlobalVar.h"
+   7          
+   8          #define  START_TOUCH_PWM_VALUE    50
+   9          #define  STOP_TOUCH_PWM_VALUE    100
+  10          
+  11          int8u   enery_dec;
+  12          int8u   TouchFlag;      //接触状态基：0无接触 1正常接触 2短路接触
+  13          int8u   TouchCnt;       //接触与脱离计数器
+  14          int16u  adc_null_value;         //RF不工作时的ADC值
+  15          int16u  adc_max_vlaue;          //RF工作中检测到最大的ADC值
+  16          
+  17          code int16u  CMP_MIN[31]={100,   150,170,180,190,200,   210,210,230,240,250,   250,255,260,265,270,   275,
+             -285,285,295,295,  305,305,305,315,325,  350,365,380,385,400};
+  18              
+  19          //dir=0时停止，1时功率减，2时启动,3功率加
+  20          void rf_state_update(int8u sta) 
+  21          {
+  22   1              TouchCnt=0;
+  23   1              if(sta==0){
+  24   2                      TouchFlag=0;
+  25   2                      enery_dec=0;
+  26   2                      pwmmax=0;
+  27   2              }else if(sta==1){
+  28   2                      enery_dec++;
+  29   2                      if((system_state==2)&&((TouchFlag==1)||(TouchFlag==2))){
+  30   3                              pwmmax=POWER_VALUE[RF_Power];
+  31   3                      }
+  32   2              }else if(sta==2){
+  33   2                      TouchFlag=0;
+  34   2                      enery_dec=0;
+  35   2                      pwmmax=TEST_PWM;
+  36   2              }else if(sta==3){
+  37   2                      if((system_state==2)&&((TouchFlag==1)||(TouchFlag==2))){
+  38   3                              pwmmax=POWER_VALUE[RF_Power];
+  39   3                      }
+  40   2              }
+  41   1      }
+  42                  
+  43          void pwm_ctrl(void)
+  44          {
+  45   1          if(t100msFlag){
+  46   2              t100msFlag=0;
+  47   2              if((system_state==2)&&(RF_Power>0)){
+  48   3                  switch(TouchFlag){
+  49   4                  case 0:
+  50   4                      pwmmax=TEST_PWM;
+  51   4                      adc_max_vlaue=STOP_TOUCH_PWM_VALUE;
+  52   4                      if(adc_avg > (adc_null_value+START_TOUCH_PWM_VALUE)){
+  53   5                          TouchCnt++;
+C51 COMPILER V9.57.0.0   RF_CTRL                                                           03/18/2024 15:31:20 PAGE 2   
+
+  54   5                          if(TouchCnt>=2){
+  55   6                              TouchFlag=1;                 //上升
+  56   6                              TouchCnt=0;
+  57   6                              pwmmax=POWER_VALUE[RF_Power];
+  58   6                          }
+  59   5                      }else{
+  60   5                          TouchCnt=0;
+  61   5                      }
+  62   4                      break;
+  63   4                  case 1:
+  64   4                      TouchCnt++;
+  65   4                      if(TouchCnt>=5){                   //0.1*(2+5)=0.7s后稳定输出
+  66   5                          TouchCnt=0;
+  67   5                          TouchFlag=2;
+  68   5                          //txbuf[0]=0;
+  69   5                          //txbuf[1]=1;
+  70   5                          //DataRegWrite(0x4000,2,txbuf);
+  71   5                          keyVoiceFlag=KEY_NOMAL_VOICE;
+  72   5                          //rootPlay(0x0001);
+  73   5                      }
+  74   4                      if(adc_avg>adc_max_vlaue){
+  75   5                          adc_max_vlaue=adc_avg;
+  76   5                      }
+  77   4                      if(adc_avg<CMP_MIN[RF_Power]){
+  78   5                          pwmmax=TEST_PWM;
+  79   5                          TouchFlag=0;
+  80   5                          TouchCnt=0;
+  81   5                      }
+  82   4                      break;
+  83   4                  case 2:
+  84   4                      if(enery_dec>0){
+  85   5                          TouchCnt++;
+  86   5                          if(TouchCnt>=5){
+  87   6                              TouchCnt=0;
+  88   6                              enery_dec=0;
+  89   6                          }
+  90   5                          adc_max_vlaue=adc_avg;
+  91   5                      }else{
+  92   5                          if(adc_avg < (adc_max_vlaue-STOP_TOUCH_PWM_VALUE)){        //有移开
+  93   6                              TouchCnt++;
+  94   6                              if(TouchCnt>=2){
+  95   7                                  pwmmax=0;
+  96   7                                  TouchCnt=0;
+  97   7                                  //system_lock=0;
+  98   7                                  TouchFlag=3;
+  99   7                                  keyVoiceFlag=KEY_NOMAL_VOICE;
+ 100   7                                  //rootPlay(0x0002);
+ 101   7                                  //txbuf[0]=0;
+ 102   7                                  //txbuf[1]=2;
+ 103   7                                  //DataRegWrite(0x4000,2,txbuf);
+ 104   7                              }
+ 105   6                          }else{
+ 106   6                              TouchCnt=0;
+ 107   6                          }
+ 108   5                          if(adc_avg>adc_max_vlaue){
+ 109   6                              adc_max_vlaue=adc_avg;
+ 110   6                          }
+ 111   5                      }
+ 112   4                      break;
+ 113   4                  case 3:                               //移开延时重新给最小输出                          
+ 114   4                      TouchCnt++;
+ 115   4                      if(TouchCnt>=5){
+C51 COMPILER V9.57.0.0   RF_CTRL                                                           03/18/2024 15:31:20 PAGE 3   
+
+ 116   5                          TouchCnt=0;
+ 117   5                          TouchFlag=0;
+ 118   5                          TouchCnt=0;
+ 119   5                          pwmmax=TEST_PWM;
+ 120   5                          //system_lock=1;
+ 121   5                          adc_max_vlaue=STOP_TOUCH_PWM_VALUE;
+ 122   5                      }
+ 123   4                      break;
+ 124   4                  default:
+ 125   4                      break;
+ 126   4                  }
+ 127   3              }else{
+ 128   3                  TouchFlag=0;
+ 129   3                  TouchCnt=0;
+ 130   3                  pwmmax=0;
+ 131   3                  //adc_null_value += adc_avg;
+ 132   3                  //adc_null_value >>= 1;
+ 133   3                  adc_null_value=adc_avg;
+ 134   3                  adc_max_vlaue=STOP_TOUCH_PWM_VALUE;    //确保adc_max_vlaue>=STOP_TOUCH_PWM_VALUE
+ 135   3              }
+ 136   2          }
+ 137   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    382    ----
+   CONSTANT SIZE    =     62    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      7    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

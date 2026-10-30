@@ -1,0 +1,607 @@
+C51 COMPILER V9.57.0.0   MAIN                                                              03/18/2024 15:31:18 PAGE 1   
+
+
+C51 COMPILER V9.57.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE Source\main.c OMF2 OPTIMIZE(8,SPEED) BROWSE INCDIR(.\Inc) DEBUG PRINT(.\
+                    -Listings\main.lst) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          
+   2          #include "bz.h"
+   3          #include "timer.h"
+   4          #include "GlobalVar.h"
+   5          //#include "108-DS1302.h"
+   6          //#include "RC522.h"
+   7          //#include "lcd1602.h"
+   8          //#include "key.h"
+   9          #include "Adc_C51.h"
+  10          #include "main.h"
+  11          #include "Binary.h"
+  12          #include "pwm.h"
+  13          #include "key.h"
+  14          //#include "led_drv.h"
+  15          #include "TM1637_drv.h"
+  16          #include "rf_ctrl.h"
+  17          #include "uart1.h"
+  18          #include "stdio.h"
+  19          #include "e2prom.h"
+  20          
+  21          //disbuf[4]的赋值
+  22          #define FUNC_RF   1
+  23          #define FUNC_EMS  2
+  24          
+  25          xdata int8u disbuf[6]={11,11,11,11,FUNC_EMS,0};
+  26          //int8u systemState;   //0 logo定时 1工作定时 2时钟调节
+  27          //int8u WarmTimer;     //定时报警计数器
+  28          //int8u WarmTimerCnt;  //定时报警计数器
+  29          int8u min;
+  30          int8u sec;
+  31          //int8u mode;
+  32          //int8u modeCnt;       //模式持续定时器
+  33          //int8u clockIndex;    //时钟参数索引 0时十，1时个，2分十，3分个，4年十，5年个，6月十，7月个，8日十，9日个
+  34          
+  35          //int8u temp_Dis[]="25du";
+  36          xdata int8u times_DisTemp[]="000";
+  37          xdata int8u time_DisTemp[]="00:00";
+  38          xdata int8u power_DisTemp[]="00";
+  39          
+  40          //char   checkCardFlag;  //读卡标识,0验卡失败，1验卡成功, 0x0f未寻到卡
+  41          xdata int8u  checkCardState; //读卡状态,0验卡失败，1验卡成功, 2进入工作系统
+  42          xdata int16u card_Times;   //卡次数
+  43          xdata int8u  test_delay=3;
+  44          xdata int8u  fans_delay=0;
+  45          
+  46          int8u func;    //0三通大师  1磁浮
+  47          int8u RF_Power;//磁浮功率0-30
+  48          int8u BIO_Power;
+  49          int8u system_state;
+  50          int8u eng_tmp;
+  51          
+  52          #define CHIPID_ADDR 0x6ff9        //STC8H1K28
+  53          char  *chip_id;
+  54          xdata char chip_id_tbl[7];
+C51 COMPILER V9.57.0.0   MAIN                                                              03/18/2024 15:31:18 PAGE 2   
+
+  55          xdata char pass_id_tbl[7];//      pass_id_tbl[6]为checksum
+  56          xdata int8u check_sum;
+  57          xdata int8u key_code;
+  58          xdata int8u key_code_tmp1;
+  59          xdata int8u key_code_tmp2;
+  60          xdata int16u work_times=0;//工作次数
+  61          xdata int16u work_time=DEF_MIN; //工作时间
+  62          xdata int8u sys_chg_flag=0;
+  63          xdata int8u flash_flag=0;
+  64          xdata int8u e2prom_buf[6]={0};
+  65          xdata int8u times_dis_delay;
+  66          /*
+  67          如果机子保存有次数，那么开机直接到工作页面，如果没有剩余次数数码管就显示“E0 E0”，
+  68          然后工作5分钟后扣费一次次数，倒计时结束，如果次数没有就显示"E0 E0 "，还有剩余次数
+  69          像现在一样，恢复工作时间等待下次工作
+  70          */
+  71          
+  72          void no_card_test(void)
+  73          {
+  74   1              checkCardState=2;
+  75   1              min=DEF_MIN;
+  76   1              sec=0;
+  77   1              func=0;
+  78   1              RF_SEL=0;
+  79   1              disbuf[4]=FUNC_EMS;
+  80   1              disbuf[0]=number[min/10];
+  81   1              disbuf[1] &= 0x04;
+  82   1              disbuf[1] |= number[min%10];
+  83   1              if(eng_tmp>0){
+  84   2                      disbuf[2]=number[12];
+  85   2                      disbuf[3]=number[12];
+  86   2                      system_state=0;
+  87   2                      keyVoiceFlag=FOUR_SHORT_VOICE;
+  88   2              }else{
+  89   2                      disbuf[2]=0;
+  90   2                      disbuf[3]=0;
+  91   2                      system_state=2;
+  92   2                      keyVoiceFlag=KEY_NOMAL_VOICE;
+  93   2              }
+  94   1              TM1637_update(disbuf);
+  95   1              //JDQ=0;
+  96   1              HOT_SW=1;
+  97   1      }
+  98          
+  99          void main(void)
+ 100          {
+ 101   1              int8u keyValue;
+ 102   1          sys_init();
+ 103   1              IapIdle();
+ 104   1              timer_Init();
+ 105   1          InitADC();
+ 106   1          //RC522_Init();
+ 107   1              //lcd_init();
+ 108   1              uart1_Init();
+ 109   1              pwm_init();
+ 110   1              TM1637_Init();
+ 111   1          TM1637_Test();
+ 112   1              SEI();
+ 113   1          //disInit();
+ 114   1          keyVoiceFlag=KEY_NOMAL_VOICE;
+ 115   1              //获取chipid
+ 116   1              chip_id=(char code *)CHIPID_ADDR;
+C51 COMPILER V9.57.0.0   MAIN                                                              03/18/2024 15:31:18 PAGE 3   
+
+ 117   1              key_code_tmp1=0;
+ 118   1              for(keyValue=0;keyValue<6;keyValue++){
+ 119   2                      chip_id_tbl[keyValue]=chip_id[keyValue];
+ 120   2                      key_code_tmp1 ^= chip_id[keyValue];
+ 121   2              }
+ 122   1              for(keyValue=0;keyValue<6;keyValue++){
+ 123   2                      e2prom_buf[keyValue]=IapReadByte(keyValue);
+ 124   2              }
+ 125   1              if((e2prom_buf[0]==0x5a)&&(e2prom_buf[1]==0xa5)){
+ 126   2                      work_times=(e2prom_buf[2]<<8)|e2prom_buf[3];
+ 127   2                      work_time =(e2prom_buf[4]<<8)|e2prom_buf[5];
+ 128   2              }else{
+ 129   2                      //初次使用，恢复默认值
+ 130   2                      IapEraseSector(0);
+ 131   2                      IapWriteByte(0,0x5a);
+ 132   2                      IapWriteByte(1,0xa5);
+ 133   2                      IapWriteByte(2,0);
+ 134   2                      IapWriteByte(3,0);
+ 135   2                      IapWriteByte(4,0);
+ 136   2                      IapWriteByte(5,0);
+ 137   2                      work_times=0;
+ 138   2                      work_time=0;
+ 139   2              }
+ 140   1              times_display_sub(3);
+ 141   1              while(1){
+ 142   2                      if(sys_chg_flag==1){
+ 143   3                              if(secFlag2){
+ 144   4                                      secFlag2=0;
+ 145   4                                      if(test_delay>0){
+ 146   5                                              test_delay--;
+ 147   5                                              if(test_delay==0){
+ 148   6                                                      no_card_test();
+ 149   6                                              }
+ 150   5                                      }
+ 151   4                                      if(fans_delay>0){
+ 152   5                                              fans_delay--;
+ 153   5                                              if(fans_delay==0){
+ 154   6                                                      FAN_SW=0;
+ 155   6                                              }
+ 156   5                                      }
+ 157   4                              }
+ 158   3                              ADC_Dis_Cvt();
+ 159   3                              if(func==1){
+ 160   4                                      //pwm_ctrl();
+ 161   4                              }
+ 162   3                              //led_driver();
+ 163   3                              keyValue=key_read();
+ 164   3                              if(keyValue==KEY_ON_OFF_LONG){
+ 165   4                                      /*
+ 166   4                                      keyVoiceFlag=KEY_NOMAL_VOICE;
+ 167   4                                      system_state=0;
+ 168   4                                      rf_state_update(STOP_STA);
+ 169   4                                      if(func==0){
+ 170   4                                              func=1;
+ 171   4                                              RF_SEL=1;
+ 172   4                                              disbuf[4]=FUNC_RF;
+ 173   4                                      }else{
+ 174   4                                              func=0;
+ 175   4                                              RF_SEL=0;
+ 176   4                                              disbuf[4]=FUNC_EMS;
+ 177   4                                      }
+ 178   4                                      TM1637_update(disbuf);*/
+C51 COMPILER V9.57.0.0   MAIN                                                              03/18/2024 15:31:18 PAGE 4   
+
+ 179   4                              }else if(keyValue==KEY_ON_OFF_SHORT){
+ 180   4                                      rf_state_update(STOP_STA);
+ 181   4                                      if(eng_tmp>0){
+ 182   5                                              disbuf[1] &= ~0x04;
+ 183   5                                              disbuf[2]=number[12];
+ 184   5                                              disbuf[3]=number[12];
+ 185   5                                              system_state=0;
+ 186   5                                              fans_delay=90;
+ 187   5                                              keyVoiceFlag=FOUR_SHORT_VOICE;
+ 188   5                                              cmd_448k(0x2203,0);
+ 189   5                                      }else{
+ 190   5                                              keyVoiceFlag=KEY_NOMAL_VOICE;
+ 191   5                                              system_state=2;
+ 192   5                                              if(func==0){
+ 193   6                                                      func=1;
+ 194   6                                                      cmd_448k(0x2000,1);
+ 195   6                                                      //cmd_448k(0x2200,0); 
+ 196   6                                                      RF_SEL=1;
+ 197   6                                                      FAN_SW=1;
+ 198   6                                                      disbuf[4]=FUNC_RF;
+ 199   6                                                      rf_state_update(STAR_STA);
+ 200   6                                                      cmd_448k(0x2203,1);
+ 201   6                                              }else{
+ 202   6                                                      func=0;
+ 203   6                                                      fans_delay=90;
+ 204   6                                                      RF_SEL=0;
+ 205   6                                                      disbuf[4]=FUNC_EMS;
+ 206   6                                              }
+ 207   5                                              if(min==0){
+ 208   6                                                      min=DEF_MIN;
+ 209   6                                                      disbuf[0]=number[min/10];
+ 210   6                                                      disbuf[1] &= 0x04;
+ 211   6                                                      disbuf[1] |= number[min%10];
+ 212   6                                              }
+ 213   5                                              //TM1637_update(disbuf)
+ 214   5                                      }
+ 215   4                              }
+ 216   3                              timeDeal();
+ 217   3                              if(t250msFlag){               //250ms detect once
+ 218   4                                      t250msFlag=0;
+ 219   4                                      if(ADC_ENG_Value>23){
+ 220   5                                              if(func==0){
+ 221   6                                                      bio_flag=1;
+ 222   6                                              }
+ 223   5                                              eng_tmp = (ADC_ENG_Value+11)/34;                               //转为0-30
+ 224   5                                      }else{
+ 225   5                                              bio_flag=0;
+ 226   5                                              eng_tmp=0;
+ 227   5                                      }
+ 228   4                                      if(func==1){
+ 229   5                                              if(eng_tmp!=RF_Power){
+ 230   6                                                      if(eng_tmp<RF_Power){
+ 231   7                                                              RF_Power=eng_tmp;
+ 232   7                                                              rf_state_update(PDEC_STA);
+ 233   7                                                      }else if(eng_tmp>RF_Power){
+ 234   7                                                              RF_Power=eng_tmp;
+ 235   7                                                              rf_state_update(PINC_STA);
+ 236   7                                                      }
+ 237   6                                                      cmd_448k(0x2201,RF_Power);
+ 238   6                                              }
+ 239   5                                      }
+ 240   4                                      if(system_state==2){
+C51 COMPILER V9.57.0.0   MAIN                                                              03/18/2024 15:31:18 PAGE 5   
+
+ 241   5                                              disbuf[2]=number[eng_tmp/10];
+ 242   5                                              disbuf[3]=number[eng_tmp%10];
+ 243   5                                      }else{
+ 244   5                                              if(eng_tmp==0){
+ 245   6                                                      system_state=2;
+ 246   6                                                      if(func==1){
+ 247   7                                                              FAN_SW=1;
+ 248   7                                                              cmd_448k(0x2203,1);
+ 249   7                                                      }
+ 250   6                                                      if(min==0){
+ 251   7                                                              min=DEF_MIN;
+ 252   7                                                              disbuf[0]=number[min/10];
+ 253   7                                                              disbuf[1] &= 0x04;
+ 254   7                                                              disbuf[1] |= number[min%10];
+ 255   7                                                      }
+ 256   6                                              }
+ 257   5                                      }
+ 258   4                                      //TM1637_update(disbuf);
+ 259   4                                      /*测试ADC值用
+ 260   4                                      temp_Dis[0]=ADC_ENG_Value/1000+0x30;
+ 261   4                                      temp_Dis[1]=ADC_ENG_Value%1000/100+0x30;
+ 262   4                                      temp_Dis[2]=ADC_ENG_Value%100/10+0x30;
+ 263   4                                      temp_Dis[3]=ADC_ENG_Value%10+0x30;
+ 264   4                                      lcd_pos(6,2);
+ 265   4                                      wr_string(temp_Dis);
+ 266   4                                      temp_Dis[0]=ADC_MOD_Value/1000+0x30;
+ 267   4                                      temp_Dis[1]=ADC_MOD_Value%1000/100+0x30;
+ 268   4                                      temp_Dis[2]=ADC_MOD_Value%100/10+0x30;
+ 269   4                                      temp_Dis[3]=ADC_MOD_Value%10+0x30;
+ 270   4                                      lcd_pos(12,2);
+ 271   4                                      wr_string(temp_Dis);
+ 272   4                                      */
+ 273   4                                      #if 0
+                                              if(checkCardState==0){
+                                                      checkCardFlag=RC522_Handel();
+                                                      if(checkCardFlag==1){
+                                                              checkCardState=1;
+                                                              card_Times=(RFID[1]<<8)|RFID[2];
+                                                              //card_Times = 0x01ff;                          //限9位
+                                                              times_DisTemp[0]=card_Times/100+0x30;
+                                                              times_DisTemp[1]=card_Times%100/10+0x30;
+                                                              times_DisTemp[2]=card_Times%10+0x30;
+                                                              lcd_pos(13,2);
+                                                              wr_string(times_DisTemp);
+                                                              min=RFID[0];
+                                                              sec=0;
+                                                              time_DisTemp[0] = min/10+0x30;
+                                                              time_DisTemp[1] = min%10+0x30;
+                                                              time_DisTemp[3] = sec/10+0x30;
+                                                              time_DisTemp[4] = sec%10+0x30;
+                                                              lcd_pos(6,2);
+                                                              wr_string(time_DisTemp);
+                                                              keyVoiceFlag=KEY_NOMAL_VOICE;
+                                                              // JDQ=0;
+                                                              HOT_SW=0;
+                                                      }else if(checkCardFlag==0x0f){
+                                                              checkCardState=0;
+                                                              //keyVoiceFlag=KEY_WARM_VOICE;
+                                                      }else if(checkCardFlag==0x02){                     //无次数
+                                                              checkCardState=2;
+                                                              times_DisTemp[0]='H';
+                                                              times_DisTemp[1]='H';
+C51 COMPILER V9.57.0.0   MAIN                                                              03/18/2024 15:31:18 PAGE 6   
+
+                                                              times_DisTemp[2]='H';
+                                                              lcd_pos(13,2);
+                                                              wr_string(times_DisTemp);
+                                                              min=RFID[0];
+                                                              sec=0;
+                                                              time_DisTemp[0] = min/10+0x30;
+                                                              time_DisTemp[1] = min%10+0x30;
+                                                              time_DisTemp[3] = sec/10+0x30;
+                                                              time_DisTemp[4] = sec%10+0x30;
+                                                              lcd_pos(6,2);
+                                                              wr_string(time_DisTemp);
+                                                              keyVoiceFlag=KEY_NOMAL_VOICE;
+                                                              //JDQ=0;
+                                                              HOT_SW=0;
+                                                      }
+                                              }
+                                              #endif
+ 320   4                              }
+ 321   3                      }else{
+ 322   3                              if(t500msFlag){
+ 323   4                                      t500msFlag=0;
+ 324   4                                      if(flash_flag){
+ 325   5                                              disbuf[0]=number[13];
+ 326   5                                              disbuf[1]=number[0];
+ 327   5                                              disbuf[2]=number[13];
+ 328   5                                              disbuf[3]=number[0];
+ 329   5                                              flash_flag=0;
+ 330   5                                      }else{
+ 331   5                                              disbuf[0]=0;
+ 332   5                                              disbuf[1]=0;
+ 333   5                                              disbuf[2]=0;
+ 334   5                                              disbuf[3]=0;
+ 335   5                                              flash_flag=1;
+ 336   5                                      }
+ 337   4                              }
+ 338   3                      }
+ 339   2                      if(Rx1EndFlag){
+ 340   3                              Rx1EndFlag=0;
+ 341   3                              if(S1RX_BUFFER[0]==0xf0){      //机器码获取
+ 342   4                                      check_sum=0;
+ 343   4                                      for(keyValue=0;keyValue<8;keyValue++){
+ 344   5                                              check_sum += S1RX_BUFFER[keyValue];
+ 345   5                                      }
+ 346   4                                      if(check_sum==S1RX_BUFFER[8]){
+ 347   5                                              key_code_tmp2=0;
+ 348   5                                              for(keyValue=0;keyValue<6;keyValue++){
+ 349   6                                                      pass_id_tbl[keyValue] = S1RX_BUFFER[keyValue+2];
+ 350   6                                                      key_code_tmp2 ^= pass_id_tbl[keyValue];
+ 351   6                                              }
+ 352   5                                              key_code=key_code_tmp1+key_code_tmp2;
+ 353   5                                              S1TX_BUFFER[0]=0xf0;
+ 354   5                                              S1TX_BUFFER[1]=6;
+ 355   5                                              check_sum=0xf6;
+ 356   5                                              for(keyValue=0;keyValue<6;keyValue++){
+ 357   6                                                      check_sum += chip_id_tbl[keyValue];
+ 358   6                                                      S1TX_BUFFER[keyValue+2] = chip_id_tbl[keyValue];
+ 359   6                                              }
+ 360   5                                              S1TX_BUFFER[8]=check_sum;
+ 361   5                                              //S1TX_BUFFER[9]=key_code;
+ 362   5                                              back_app(S1TX_BUFFER);
+ 363   5                                      }
+ 364   4                              }else if(S1RX_BUFFER[0]==0xf1){//支付信息下发
+C51 COMPILER V9.57.0.0   MAIN                                                              03/18/2024 15:31:18 PAGE 7   
+
+ 365   4                                      check_sum = 0xf1+S1RX_BUFFER[1];
+ 366   4                                      for(keyValue=2;keyValue<8;keyValue++){
+ 367   5                                              S1RX_BUFFER[keyValue] += key_code;
+ 368   5                                              check_sum += S1RX_BUFFER[keyValue];
+ 369   5                                      }
+ 370   4                                      if(check_sum==S1RX_BUFFER[8]){
+ 371   5                                              work_times=(S1RX_BUFFER[2]<<8)|S1RX_BUFFER[3];
+ 372   5                                              work_time =(S1RX_BUFFER[4]<<8)|S1RX_BUFFER[5];
+ 373   5                                              S1TX_BUFFER[0]=0xf1;
+ 374   5                                              S1TX_BUFFER[1]=6;
+ 375   5                                              check_sum=0xf7;
+ 376   5                                              for(keyValue=2;keyValue<8;keyValue++){
+ 377   6                                                      check_sum += S1RX_BUFFER[keyValue];
+ 378   6                                                      S1TX_BUFFER[keyValue] = S1RX_BUFFER[keyValue]-key_code;
+ 379   6                                              }
+ 380   5                                              S1TX_BUFFER[8]=check_sum;
+ 381   5                                              back_app(S1TX_BUFFER);
+ 382   5                                              IapEraseSector(0);
+ 383   5                                              IapWriteByte(0,0x5a);
+ 384   5                                              IapWriteByte(1,0xa5);
+ 385   5                                              IapWriteByte(2,work_times>>8);
+ 386   5                                              IapWriteByte(3,work_times);
+ 387   5                                              IapWriteByte(4,work_time>>8);
+ 388   5                                              IapWriteByte(5,work_time);
+ 389   5                                              times_display_sub(3);
+ 390   5                                      }
+ 391   4                              }else if(S1RX_BUFFER[0]==0xf2){//支付信息读取
+ 392   4                                      check_sum = 0xf2+S1RX_BUFFER[1];
+ 393   4                                      for(keyValue=2;keyValue<8;keyValue++){
+ 394   5                                              S1RX_BUFFER[keyValue] += key_code;
+ 395   5                                              check_sum += S1RX_BUFFER[keyValue];
+ 396   5                                      }
+ 397   4                                      if(check_sum==S1RX_BUFFER[8]){
+ 398   5                                              S1TX_BUFFER[0]=0xf2;
+ 399   5                                              S1TX_BUFFER[1]=6;
+ 400   5                                              check_sum=0xf8;
+ 401   5                                              S1TX_BUFFER[2]=work_times>>8;
+ 402   5                                              S1TX_BUFFER[3]=work_times;
+ 403   5                                              S1TX_BUFFER[4]=work_time>>8;
+ 404   5                                              S1TX_BUFFER[5]=work_time;
+ 405   5                                              for(keyValue=2;keyValue<8;keyValue++){
+ 406   6                                                      check_sum += S1TX_BUFFER[keyValue];
+ 407   6                                                      S1TX_BUFFER[keyValue] = S1TX_BUFFER[keyValue]-key_code;
+ 408   6                                              }
+ 409   5                                              S1TX_BUFFER[8]=check_sum;
+ 410   5                                              back_app(S1TX_BUFFER);
+ 411   5                                      }
+ 412   4                              }
+ 413   3                      }
+ 414   2                      if(t100msFlag1){              //定时刷新
+ 415   3                              t100msFlag1=0;
+ 416   3                              TM1637_update(disbuf);
+ 417   3                              //测试打印
+ 418   3                              //printf("adc_avg=%hu\r\n",adc_avg);
+ 419   3                      }
+ 420   2                      keyVoice();
+ 421   2              }
+ 422   1      }
+ 423          
+ 424          void times_display_sub(int8u dt)
+ 425          {
+ 426   1              times_dis_delay=dt;
+C51 COMPILER V9.57.0.0   MAIN                                                              03/18/2024 15:31:18 PAGE 8   
+
+ 427   1              disbuf[0]=number[work_times%10000/1000];
+ 428   1              disbuf[1]=number[work_times%1000/100];
+ 429   1              disbuf[2]=number[work_times%100/10];
+ 430   1              disbuf[3]=number[work_times%10];
+ 431   1              secFlag2=0;
+ 432   1              TM1637_update(disbuf);
+ 433   1              do{
+ 434   2                      if(secFlag2){
+ 435   3                              secFlag2=0;
+ 436   3                              times_dis_delay--;
+ 437   3                      }
+ 438   2                      keyVoice();
+ 439   2              }while(times_dis_delay);
+ 440   1              if(work_times==0){ //无使用次数了
+ 441   2                      sys_chg_flag=0;
+ 442   2                      disbuf[0]=number[13];
+ 443   2                      disbuf[1]=number[0];
+ 444   2                      disbuf[2]=number[13];
+ 445   2                      disbuf[3]=number[0];
+ 446   2                      flash_flag=0;
+ 447   2              }else{
+ 448   2                      sys_chg_flag=1;
+ 449   2              }
+ 450   1      }
+ 451          void sys_init(void)
+ 452          {
+ 453   1          //JDQ=0;
+ 454   1              BZPORT=BZOFF;
+ 455   1              RF_SEL=0;
+ 456   1          HOT_SW=0;
+ 457   1              FAN_SW=0;
+ 458   1          system_state=0;
+ 459   1          checkCardState=0;
+ 460   1              BIO_P1=0;
+ 461   1              BIO_P2=0;
+ 462   1              BIO_PWM=0;
+ 463   1              LED_P1=0;
+ 464   1              LED_P2=0;
+ 465   1              LED_P3=0;
+ 466   1              LED_N1=0;
+ 467   1              LED_N2=0;
+ 468   1              LED_N3=0;
+ 469   1              LED_N4=0;
+ 470   1              RF_SW=1;
+ 471   1              P36=1;
+ 472   1              P37=1;
+ 473   1              
+ 474   1              P0M1 = B1111_0000;
+ 475   1              P0M0 = B0000_1111;
+ 476   1              
+ 477   1              P1M1 = B0010_1100;
+ 478   1              P1M0 = B0001_0010;
+ 479   1              
+ 480   1              P2M1 = B0000_0000;
+ 481   1              P2M0 = B0000_1100;
+ 482   1              
+ 483   1              P3M1 = B0000_0000;
+ 484   1              P3M0 = B0001_0100;
+ 485   1              
+ 486   1              P4M1 = B1111_1111;
+ 487   1              P4M0 = B0000_0000;
+ 488   1      
+C51 COMPILER V9.57.0.0   MAIN                                                              03/18/2024 15:31:18 PAGE 9   
+
+ 489   1              P5M1 = B1110_1111;
+ 490   1              P5M0 = B0001_0000;
+ 491   1              
+ 492   1              func=0;
+ 493   1              test_delay=1;
+ 494   1      }
+ 495          
+ 496          void disInit(void)
+ 497          {
+ 498   1              //默认func=0;
+ 499   1      }
+ 500          
+ 501          void timeDeal(void)
+ 502          {
+ 503   1              if(system_state==2){
+ 504   2              if(secFlag1){        
+ 505   3                  secFlag1=0; 
+ 506   3                  if(sec<60){
+ 507   4                      sec++;
+ 508   4                  }else{
+ 509   4                      sec=0;
+ 510   4                      if(min>1){
+ 511   5                          min--;
+ 512   5                          disbuf[0]=number[min/10];
+ 513   5                          disbuf[1] &= 0x04;
+ 514   5                          disbuf[1] |= number[min%10];
+ 515   5                                              if(min==DEC_MIN){
+ 516   6                                                      if(work_times>0){
+ 517   7                                                              work_times--;
+ 518   7                                                              IapEraseSector(0);
+ 519   7                                                              IapWriteByte(0,0x5a);
+ 520   7                                                              IapWriteByte(1,0xa5);
+ 521   7                                                              IapWriteByte(2,work_times>>8);
+ 522   7                                                              IapWriteByte(3,work_times);
+ 523   7                                                              IapWriteByte(4,work_time>>8);
+ 524   7                                                              IapWriteByte(5,work_time);
+ 525   7                                                      }
+ 526   6                                              }
+ 527   5                      }else{
+ 528   5                          system_state=0;
+ 529   5                                              fans_delay=90;
+ 530   5                          //checkCardState=0;
+ 531   5                                              rf_state_update(STOP_STA);
+ 532   5                          HOT_SW=0;
+ 533   5                          sec=0;
+ 534   5                          min=0;
+ 535   5                          disbuf[0]=number[11];
+ 536   5                          disbuf[1]=number[11];
+ 537   5                          disbuf[2]=number[12];
+ 538   5                          disbuf[3]=number[12];
+ 539   5                          //disbuf[4]=0;
+ 540   5                          //disbuf[5]=0;
+ 541   5                          TM1637_update(disbuf);
+ 542   5                          keyVoiceFlag=SYS_OVER_VOICE;
+ 543   5                                              cmd_448k(0x2203,0);
+ 544   5                          return;
+ 545   5                      }
+ 546   4                  }
+ 547   3              }
+ 548   2              if(t500msFlag){
+ 549   3                  t500msFlag=0;
+ 550   3                  disbuf[1] ^= 0x04;
+C51 COMPILER V9.57.0.0   MAIN                                                              03/18/2024 15:31:18 PAGE 10  
+
+ 551   3                  //测试adc代码开始
+ 552   3                  //disbuf[0]=number[adc_avg/1000];
+ 553   3                  //disbuf[1] &= 0x04;
+ 554   3                  //disbuf[1] |= number[adc_avg%1000/100];
+ 555   3                  //disbuf[2]=number[adc_avg%100/10];
+ 556   3                  //disbuf[3]=number[adc_avg%10];
+ 557   3                  //测试adc代码结束
+ 558   3                  //TM1637_update(disbuf);
+ 559   3              }
+ 560   2          }
+ 561   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   2182    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =     55    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     10       1
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

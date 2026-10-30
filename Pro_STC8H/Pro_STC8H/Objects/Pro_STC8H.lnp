@@ -1,0 +1,14 @@
+".\Objects\STARTUP.obj",
+".\Objects\Adc_C51.obj",
+".\Objects\bz.obj",
+".\Objects\main.obj",
+".\Objects\timer.obj",
+".\Objects\pwm.obj",
+".\Objects\key.obj",
+".\Objects\TM1637_drv.obj",
+".\Objects\rf_ctrl.obj",
+".\Objects\uart1.obj",
+".\Objects\e2prom.obj" 
+TO ".\Objects\Pro_STC8H" 
+
+PRINT(".\Listings\Pro_STC8H.map") REMOVEUNUSED 

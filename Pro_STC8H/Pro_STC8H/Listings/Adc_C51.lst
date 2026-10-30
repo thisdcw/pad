@@ -1,0 +1,176 @@
+C51 COMPILER V9.57.0.0   ADC_C51                                                           03/18/2024 15:31:17 PAGE 1   
+
+
+C51 COMPILER V9.57.0.0, COMPILATION OF MODULE ADC_C51
+OBJECT MODULE PLACED IN .\Objects\Adc_C51.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE Source\Adc_C51.c OMF2 OPTIMIZE(8,SPEED) BROWSE INCDIR(.\Inc) DEBUG PRINT
+                    -(.\Listings\Adc_C51.lst) OBJECT(.\Objects\Adc_C51.obj)
+
+line level    source
+
+   1          
+   2          
+   3          #include "Adc_C51.h"
+   4          #include "timer.h"
+   5          #include"pwm.h"
+   6          #include "GlobalVar.h"
+   7          
+   8          bit    adcCvtFlag;//ADC转换结束标志
+   9          int16u ADC_Value;
+  10          int16u tempValue1;
+  11          int8u  real_temp1;
+  12          int8u  chnl;             //ADC channel NO.
+  13          
+  14          int16u  ADC_ENG_Value;
+  15          int16u  ADC_MOD_Value;
+  16          
+  17          int8u   pwm_value1;
+  18          int8u   pwm_value2;
+  19          
+  20          int16u adc_avg;
+  21          int8u  adc_cnt;
+  22          bit    dt_adc_flag;
+  23          
+  24          void InitADC(void)
+  25          {
+  26   1          P_SW2 |= 0x80;
+  27   1              ADCTIM = 0x3f;
+  28   1              P_SW2 &= ~0x80;
+  29   1              ADCCFG = 0x27;     //设计ADC时钟为系统时钟/2/8
+  30   1              ADC_CONTR = 0x82;  //打开ADC电源，并选择第2通道
+  31   1              EADC = 1;          //允许ADC中断
+  32   1          chnl=ADC_MOD;
+  33   1      }
+  34          void start_adc(void)
+  35          {
+  36   1              //可能有BUG 有可能转换中
+  37   1              ADC_CONTR &= 0xf0;
+  38   1          ADC_CONTR |= ADC_START|ADC_RFT;
+  39   1          adc_cnt=0;
+  40   1          dt_adc_flag=1;
+  41   1      }
+  42          
+  43          float code temp_tb[]={
+  44              32.7547,31.1243,29.5847,28.1301,26.7556,
+  45              25.4562,24.2274,23.065,21.965,20.9239,19.938,19.0041,18.1193,17.2807,16.4857,15.7317,15.0164,14.3376,
+  46              13.6933,13.0816,12.5005,11.9485,11.4239,10.9252,10.451,10,9.5709,9.1626,8.7738,8.4037,8.0512,7.7154,
+  47              7.3953,7.0903,6.7995,6.5221,6.2576,6.0051,5.7642,5.5342,5.3146,5.1049,4.9045,4.713,4.53,4.3551,4.1878,
+  48              4.0278,3.8748,3.7283,3.5882,3.454,3.3255,3.2025,3.0846,2.9717,2.8635,2.7597,2.6603,2.5649,2.4734,2.385
+             -6,
+  49              2.3014,2.2206,2.1431,2.0686,1.997,1.9283,1.8623,1.7989,1.738
+  50          };
+  51          
+  52          int8u ADC_to_TMEP(uint16_t adc_value)
+  53          {
+C51 COMPILER V9.57.0.0   ADC_C51                                                           03/18/2024 15:31:17 PAGE 2   
+
+  54   1              uint8_t i;
+  55   1              float res_value;
+  56   1              adc_value = (uint16_t)(((uint32_t)adc_value*Vref)>>10);                 //电压
+  57   1              res_value = (((float)(adc_value*10))/(Vref-adc_value));                 //电阻
+  58   1              for(i=0;i<sizeof(temp_tb)/sizeof(temp_tb[0]);i++)
+  59   1              {
+  60   2                      if(res_value>temp_tb[i])break;
+  61   2              }
+  62   1              return i;
+  63   1      }
+  64          
+  65          void ADC_Dis_Cvt(void)
+  66          {
+  67   1              static int8u adcnt1=0,adcnt2=0;
+  68   1              static int16u adctemp1=0,adctemp2=0;
+  69   1              static int16u adc_sum=0;
+  70   1              if(t10msFlag2&&(!dt_adc_flag)){
+  71   2                      t10msFlag2=0;
+  72   2                      ADC_CONTR &= 0xf0;
+  73   2                      ADC_CONTR |= ADC_START|chnl;
+  74   2              }
+  75   1              if(adcCvtFlag){
+  76   2                      adcCvtFlag=0;
+  77   2                      if(dt_adc_flag){                 //反馈检测
+  78   3                  adc_cnt++;
+  79   3                  if(adc_cnt<3){
+  80   4                      adc_sum=0;
+  81   4                  }else{
+  82   4                      adc_sum += ADC_Value;
+  83   4                      if(adc_cnt>=6){          //完成6次转换，第2次丢弃
+  84   5                          adc_avg = adc_sum>>2;
+  85   5                          dt_adc_flag=0;
+  86   5                      }
+  87   4                  }
+  88   3                  if(adc_cnt<6){
+  89   4                                      ADC_CONTR &= 0xf0;
+  90   4                      ADC_CONTR |= ADC_START|ADC_RFT;
+  91   4                  }
+  92   3                      }else{
+  93   3                              if(chnl==ADC_ENG){
+  94   4                                      adctemp1 += ADC_Value;
+  95   4                                      adcnt1++;
+  96   4                                      if(adcnt1>=4){
+  97   5                                              ADC_ENG_Value=adctemp1>>2;
+  98   5                                              if(func==0){
+  99   6                                                      pwm_value1=ADC_ENG_Value/18;
+ 100   6                                                      Set_PWM(pwm_value1+pwm_value2);
+ 101   6                                              }else if(func==1){
+ 102   6                                                      
+ 103   6                                              }
+ 104   5                                              adcnt1=0;
+ 105   5                                              adctemp1=0;
+ 106   5                                      }       
+ 107   4                                      chnl=ADC_MOD;
+ 108   4                              }else if(chnl==ADC_MOD){
+ 109   4                                      adctemp2 += ADC_Value;
+ 110   4                                      adcnt2++;
+ 111   4                                      if(adcnt2>=4){
+ 112   5                                              ADC_MOD_Value=adctemp2>>2;
+ 113   5                                              if(func==0){
+ 114   6                                                      pwm_value2=ADC_MOD_Value/146;
+ 115   6                                                      Set_PWM(pwm_value1+pwm_value2);
+C51 COMPILER V9.57.0.0   ADC_C51                                                           03/18/2024 15:31:17 PAGE 3   
+
+ 116   6                                                      if(ADC_MOD_Value>762){
+ 117   7                                                              freq_counterH=(ADC_MOD_Value-762)/5+227;
+ 118   7                                                      }else{
+ 119   7                                                              freq_counterH=ADC_MOD_Value/6+100;
+ 120   7                                                      }
+ 121   6                                              }
+ 122   5                                              adcnt2=0;
+ 123   5                                              adctemp2=0;
+ 124   5                                      }       
+ 125   4                                      chnl=ADC_ENG;
+ 126   4                              }
+ 127   3                      }
+ 128   2              }
+ 129   1      }
+ 130          
+ 131          
+ 132          
+ 133          /*----------------------------------------
+ 134          ADC interrupt service routine
+ 135          -----------------------------------------*/
+ 136          void adc_isr() interrupt 5 using 2
+ 137          {
+ 138   1              ADC_CONTR &= ~ADC_FLAG;                                 //清中断标识
+ 139   1              ADC_Value = (ADC_RES<<8)|ADC_RESL;                          //读ADC结果
+ 140   1              adcCvtFlag = 1;                                         //标志ADC已完成
+ 141   1              ADC_RES  = 0;
+ 142   1              ADC_RESL = 0;
+ 143   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    510    ----
+   CONSTANT SIZE    =    284    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     23       7
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      2    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

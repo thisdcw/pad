@@ -1,0 +1,140 @@
+C51 COMPILER V9.57.0.0   KEY                                                               03/18/2024 15:31:19 PAGE 1   
+
+
+C51 COMPILER V9.57.0.0, COMPILATION OF MODULE KEY
+OBJECT MODULE PLACED IN .\Objects\key.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE Source\key.c OMF2 OPTIMIZE(8,SPEED) BROWSE INCDIR(.\Inc) DEBUG PRINT(.\L
+                    -istings\key.lst) OBJECT(.\Objects\key.obj)
+
+line level    source
+
+   1          
+   2          #include "key.h"
+   3          #include "timer.h"
+   4          
+   5          // ----------------------------------- key_driver --------------------------
+   6          unsigned char key_driver(void)
+   7          {
+   8   1          static unsigned char key_state = 0;
+   9   1          static unsigned int key_time = 0;
+  10   1          static unsigned char key_return_buffer=0;
+  11   1          unsigned char key_press, key_return;
+  12   1      
+  13   1          key_return = N_KEY;                         // Çå³ý ·µ»Ø°´¼üÖµ
+  14   1          
+  15   1              key_press |= KEY_MASK;
+  16   1          key_press = P3&KEY_MASK;                    // ¶ÁÈ¡µ±Ç°¼üÖµ
+  17   1              
+  18   1          switch (key_state)
+  19   1          {
+  20   2              case KEY_STATE_0:                       // °´¼ü×´Ì¬0£ºÅÐ¶ÏÓÐÎÞ°´¼ü°´ÏÂ
+  21   2                  if (key_press!=KEY_MASK)                      // ÓÐ°´¼ü°´ÏÂ
+  22   2                  {
+  23   3                      key_time = 0;                   // ÇåÁãÊ±¼ä¼ä¸ô¼ÆÊý
+  24   3                      key_state = KEY_STATE_1;        // È»ºó½øÈë °´¼ü×´Ì¬1
+  25   3                  }
+  26   2                  break;
+  27   2      
+  28   2              case KEY_STATE_1:                       // °´¼ü×´Ì¬1£ºÈí¼þÏû¶¶£¨È·¶¨°´¼üÊÇ·ñÓÐÐ§£¬¶ø²»ÊÇÎó´¥£©¡£°´
+             -¼üÓÐÐ§µÄ¶¨Òå£º°´¼ü³ÖÐø°´ÏÂ³¬¹ýÉè¶¨µÄÏû¶¶Ê±¼ä¡£
+  29   2                  if (key_press!=KEY_MASK)
+  30   2                  {
+  31   3                      key_time++;                     // Ò»´Î10ms
+  32   3                      if (key_time >= SINGLE_KEY_TIME)// Ïû¶¶Ê±¼äÎª£ºSINGLE_KEY_TIME*10ms = 50ms;
+  33   3                      {
+  34   4                          key_state = KEY_STATE_3;    
+  35   4                                              if(key_press==KEY_ON_OFF){
+  36   5                                                      key_return=KEY_ON_OFF_SHORT;
+  37   5                              //key_state = KEY_STATE_2;//°´¼üÓÐÐ§°üÀ¨Á½ÖÖ£ºµ¥»÷»òÕß³¤°´£¬½øÈë °´¼ü×´Ì¬2£¬ ¼ÌÐøÅÐ¶¨
+             -µ½µ×ÊÇÄÇÖÖÓÐÐ§°´¼ü
+  38   5                          }else if(key_press==KEY_UP){
+  39   5                              key_return=KEY_UP_SIGLE;
+  40   5                          }else if(key_press==KEY_DOWN){
+  41   5                              key_return=KEY_DOWN_SIGLE;
+  42   5                          }
+  43   4                      }
+  44   3                  }
+  45   2                  else
+  46   2                      key_state = KEY_STATE_0;        // Èç¹û°´¼üÊ±¼äÃ»ÓÐ³¬¹ý£¬ÅÐ¶¨ÎªÎó´¥£¬°´¼üÎÞÐ§£¬·µ»Ø °´¼ü×´
+             -Ì¬0£¬¼ÌÐøµÈ´ý°´¼ü
+  47   2                  break;
+  48   2      
+  49   2              case KEY_STATE_2:                       // °´¼ü×´Ì¬2£ºÅÐ¶¨°´¼üÓÐÐ§µÄÖÖÀà£ºÊÇµ¥»÷£¬»¹ÊÇ³¤°´
+  50   2                  if (key_press==KEY_MASK)                       // Èç¹û°´¼üÔÚ Éè¶¨µÄ³¤°´Ê±¼ä ÄÚÊÍ·Å£¬ÔòÅÐ¶¨Îªµ¥
+             -»÷
+C51 COMPILER V9.57.0.0   KEY                                                               03/18/2024 15:31:19 PAGE 2   
+
+  51   2                  {
+  52   3                      key_state = KEY_STATE_0;        // ·µ»Ø °´¼ü×´Ì¬0£¬¼ÌÐøµÈ´ý°´¼ü
+  53   3                                      key_return=key_return_buffer;
+  54   3                  }
+  55   2                  else
+  56   2                  {
+  57   3                      key_time++;
+  58   3      
+  59   3                      if (key_time >= LONG_KEY_TIME)  // Èç¹û°´¼üÊ±¼ä³¬¹ý Éè¶¨µÄ³¤°´Ê±¼ä£¨LONG_KEY_TIME*10ms=120
+             -*10ms=1200ms£©, ÔòÅÐ¶¨Îª ³¤°´
+  60   3                      {
+  61   4                          key_state = KEY_STATE_3;    // È¥×´Ì¬3£¬µÈ´ý°´¼üÊÍ·Å
+  62   4                          key_return=KEY_ON_OFF_LONG; 
+  63   4                          key_time=0;  
+  64   4                      }
+  65   3                  }
+  66   2                  break;
+  67   2      
+  68   2              case KEY_STATE_3:                       // µÈ´ý°´¼üÊÍ·Å
+  69   2                  if (key_press==KEY_MASK)
+  70   2                  {
+  71   3                      key_state = KEY_STATE_0;        // °´¼üÊÍ·Åºó£¬½øÈë °´¼ü×´Ì¬0 £¬½øÐÐÏÂÒ»´Î°´¼üµÄÅÐ¶¨
+  72   3                  }
+  73   2                  break;
+  74   2                  
+  75   2              case KEY_STATE_4:
+  76   2                      
+  77   2                              break;
+  78   2              default:                                // ÌØÊâÇé¿ö£ºkey_stateÊÇÆäËûÖµµÃÇé¿ö£¬ÇåÁãkey_state¡£ÕâÖÖÇ
+             -é¿öÒ»°ã³öÏÖÔÚ Ã»ÓÐ³õÊ¼»¯key_state£¬µÚÒ»´ÎÖ´ÐÐÕâ¸öº¯ÊýµÄÊ±ºò
+  79   2                  key_state = KEY_STATE_0;
+  80   2                  break;
+  81   2          }
+  82   1      
+  83   1          return key_return;                          // ·µ»Ø °´¼üÖµ
+  84   1      }
+  85          
+  86          unsigned char key_read(void)
+  87          {
+  88   1          //static unsigned char key_state1 = 0, key_time1 = 0;
+  89   1          unsigned char key_return, key_temp;
+  90   1              
+  91   1              if(t10msFlag1){
+  92   2                      t10msFlag1=0;
+  93   2                  key_return = N_KEY;                          // ÇåÁã ·µ»Ø°´¼üÖµ
+  94   2                  key_temp = key_driver();                     // ¶ÁÈ¡¼üÖµ
+  95   2                      key_return = key_temp;                       // ·µ»Ø °´¼üÖµ
+  96   2              }else{
+  97   2              key_return = N_KEY;                          // ÇåÁã ·µ»Ø°´¼üÖµ
+  98   2          }
+  99   1          
+ 100   1          return key_return;                               // ·µ»Ø °´¼üÖµ
+ 101   1          
+ 102   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    151    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      4    ----
+C51 COMPILER V9.57.0.0   KEY                                                               03/18/2024 15:31:19 PAGE 3   
+
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

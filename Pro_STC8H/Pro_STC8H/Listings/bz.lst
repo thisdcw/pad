@@ -1,0 +1,210 @@
+C51 COMPILER V9.57.0.0   BZ                                                                03/18/2024 15:31:17 PAGE 1   
+
+
+C51 COMPILER V9.57.0.0, COMPILATION OF MODULE BZ
+OBJECT MODULE PLACED IN .\Objects\bz.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE Source\bz.c OMF2 OPTIMIZE(8,SPEED) BROWSE INCDIR(.\Inc) DEBUG PRINT(.\Li
+                    -stings\bz.lst) OBJECT(.\Objects\bz.obj)
+
+line level    source
+
+   1          
+   2          #include "bz.h"
+   3          
+   4          int8u keyVoiceFlag;
+   5          
+   6          void keyVoice(void)
+   7          {
+   8   1              static int8u voiceState;
+   9   1              static int8u voiceCnt;
+  10   1          if(keyVoiceFlag&0x80){
+  11   2              clrbit(keyVoiceFlag,7);
+  12   2              voiceState=0;
+  13   2              voiceCnt=0;
+  14   2          }
+  15   1              if(keyVoiceFlag&0x01){              //Õý³£°´¼üÒô
+  16   2                      if(voiceState==0){
+  17   3                              BZPORT=BZON;                   //BZ on
+  18   3                              voiceState=1;
+  19   3                      }else{
+  20   3                              if(t10msFlag){
+  21   4                                      t10msFlag=0;
+  22   4                                      voiceCnt++;
+  23   4                                      if(voiceCnt==10){
+  24   5                                              voiceCnt=0;
+  25   5                                              BZPORT=BZOFF;           //BZ off
+  26   5                                              voiceState=0;
+  27   5                                              keyVoiceFlag=0;
+  28   5                                      }
+  29   4                              }
+  30   3                      }
+  31   2              }else if(keyVoiceFlag&0x02){        //¾¯¸æÒô
+  32   2                      if(voiceState==0){
+  33   3                              BZPORT=BZON;                   //BZ on
+  34   3                              voiceState=1;
+  35   3                      }else if(voiceState==1){
+  36   3                              if(t10msFlag){
+  37   4                                      t10msFlag=0;
+  38   4                                      voiceCnt++;
+  39   4                                      if(voiceCnt==5){
+  40   5                                              voiceCnt=0;
+  41   5                                              BZPORT=BZOFF;           //BZ off
+  42   5                                              voiceState=2;
+  43   5                                      }
+  44   4                              }
+  45   3                      }else if(voiceState==2){
+  46   3                              if(t10msFlag){
+  47   4                                      t10msFlag=0;
+  48   4                                      voiceCnt++;
+  49   4                                      if(voiceCnt==10){
+  50   5                                              voiceCnt=0;
+  51   5                                              BZPORT=BZON;            //BZ on
+  52   5                                              voiceState=3;
+  53   5                                      }
+  54   4                              }
+C51 COMPILER V9.57.0.0   BZ                                                                03/18/2024 15:31:17 PAGE 2   
+
+  55   3                      }else if(voiceState==3){
+  56   3                              if(t10msFlag){
+  57   4                                      t10msFlag=0;
+  58   4                                      voiceCnt++;
+  59   4                                      if(voiceCnt==5){
+  60   5                                              voiceCnt=0;
+  61   5                                              BZPORT=BZOFF;            //BZ off
+  62   5                                              voiceState=0;
+  63   5                                              keyVoiceFlag=0;
+  64   5                                      }
+  65   4                              }
+  66   3                      }
+  67   2              }else if(keyVoiceFlag&0x04){        //¶ÌÌáÊ¾Òô
+  68   2              if(voiceState==0){
+  69   3                              BZPORT=BZON;                   //BZ on
+  70   3                              voiceState=1;
+  71   3                      }else{
+  72   3                              if(t10msFlag){
+  73   4                                      t10msFlag=0;
+  74   4                                      voiceCnt++;
+  75   4                                      if(voiceCnt==5){
+  76   5                                              voiceCnt=0;
+  77   5                                              BZPORT=BZOFF;           //BZ off
+  78   5                                              voiceState=0;
+  79   5                                              keyVoiceFlag=0;
+  80   5                                      }
+  81   4                              }
+  82   3                      }
+  83   2          }else if(keyVoiceFlag&0x08){        //½áÊøÒô àÖàÖàÖ
+  84   2              switch(voiceState){
+  85   3              case 0:
+  86   3                              BZPORT=BZON;                   //BZ on
+  87   3                              voiceState=1;
+  88   3                      break;
+  89   3                      case 1:
+  90   3                  if(t10msFlag){
+  91   4                                      t10msFlag=0;
+  92   4                                      voiceCnt++;
+  93   4                                      if(voiceCnt==25){
+  94   5                                              voiceCnt=0;
+  95   5                                              BZPORT=BZOFF;           //BZ off
+  96   5                                              voiceState++;
+  97   5                                              if(voiceState==6){
+  98   6                                                      voiceState=0;
+  99   6                                                      keyVoiceFlag=0;
+ 100   6                                              }
+ 101   5                                      }
+ 102   4                              }
+ 103   3              break;
+ 104   3                      case 3:
+ 105   3                      case 5:
+ 106   3                              if(t10msFlag){
+ 107   4                                      t10msFlag=0;
+ 108   4                                      voiceCnt++;
+ 109   4                                      if(voiceCnt==5){
+ 110   5                                              voiceCnt=0;
+ 111   5                                              BZPORT=BZOFF;           //BZ off
+ 112   5                                              voiceState++;
+ 113   5                                              if(voiceState==6){
+ 114   6                                                      voiceState=0;
+ 115   6                                                      keyVoiceFlag=0;
+ 116   6                                              }
+C51 COMPILER V9.57.0.0   BZ                                                                03/18/2024 15:31:17 PAGE 3   
+
+ 117   5                                      }
+ 118   4                              }
+ 119   3                      break;
+ 120   3                      case 2:
+ 121   3                      case 4:
+ 122   3                              if(t10msFlag){
+ 123   4                                      t10msFlag=0;
+ 124   4                                      voiceCnt++;
+ 125   4                                      if(voiceCnt==10){
+ 126   5                                              voiceCnt=0;
+ 127   5                                              BZPORT=BZON;            //BZ on
+ 128   5                                              voiceState++;
+ 129   5                                      }
+ 130   4                              }
+ 131   3                      break;
+ 132   3                      default:
+ 133   3                      break;
+ 134   3                      }
+ 135   2              }else if(keyVoiceFlag&0x10){        //³¤Ïì4Éù
+ 136   2                      if(voiceState==0){
+ 137   3                              BZPORT=BZON;                   //BZ on
+ 138   3                              voiceState=1;
+ 139   3                      }else{
+ 140   3                              if(t10msFlag){
+ 141   4                                      t10msFlag=0;
+ 142   4                                      voiceCnt++;
+ 143   4                                      if(voiceCnt==50){
+ 144   5                                              voiceCnt=0;
+ 145   5                                              BZPORT ^= 1;        //·­×ª×´Ì¬
+ 146   5                                              voiceState++;
+ 147   5                                              if(voiceState==6){
+ 148   6                                                      keyVoiceFlag=0;
+ 149   6                                                      voiceState=0;
+ 150   6                                                      BZPORT=BZOFF;       //BZ off
+ 151   6                                              }
+ 152   5                                      }
+ 153   4                              }
+ 154   3                      }
+ 155   2              }else if(keyVoiceFlag&0x20){        //³¤Ïì4Éù
+ 156   2                      if(voiceState==0){
+ 157   3                              BZPORT=BZON;                   //BZ on
+ 158   3                              voiceState=1;
+ 159   3                      }else{
+ 160   3                              if(t10msFlag){
+ 161   4                                      t10msFlag=0;
+ 162   4                                      voiceCnt++;
+ 163   4                                      if(voiceCnt==35){
+ 164   5                                              voiceCnt=0;
+ 165   5                                              BZPORT ^= 1;        //·­×ª×´Ì¬
+ 166   5                                              voiceState++;
+ 167   5                                              if(voiceState==8){
+ 168   6                                                      keyVoiceFlag=0;
+ 169   6                                                      voiceState=0;
+ 170   6                                                      BZPORT=BZOFF;       //BZ off
+ 171   6                                              }
+ 172   5                                      }
+ 173   4                              }
+ 174   3                      }
+ 175   2              }
+ 176   1      }
+
+
+C51 COMPILER V9.57.0.0   BZ                                                                03/18/2024 15:31:17 PAGE 4   
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    402    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      3    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

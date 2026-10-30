@@ -1,0 +1,173 @@
+C51 COMPILER V9.57.0.0   LCD1602                                                           02/28/2024 15:57:01 PAGE 1   
+
+
+C51 COMPILER V9.57.0.0, COMPILATION OF MODULE LCD1602
+OBJECT MODULE PLACED IN .\Objects\lcd1602.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE Source\lcd1602.c OMF2 OPTIMIZE(8,SPEED) BROWSE INCDIR(.\Inc) DEBUG PRINT
+                    -(.\Listings\lcd1602.lst) OBJECT(.\Objects\lcd1602.obj)
+
+line level    source
+
+   1          
+   2          #include <intrins.h>
+   3          #include "lcd1602.h"
+   4          
+   5          int8u ByteTurn(int8u bt)
+   6          {
+   7   1              int8u des=0;
+   8   1              if(bt&0x01) des |= 0x80;
+   9   1              if(bt&0x02) des |= 0x40;
+  10   1              if(bt&0x04) des |= 0x20;
+  11   1              if(bt&0x08) des |= 0x10;
+  12   1              if(bt&0x10) des |= 0x08;
+  13   1              if(bt&0x20) des |= 0x04;
+  14   1              if(bt&0x40) des |= 0x02;
+  15   1              if(bt&0x80) des |= 0x01;
+  16   1              return des;
+  17   1      }
+  18          
+  19          void Delay1us()         //@11.0592MHz
+  20          {
+  21   1              unsigned char data i;
+  22   1      
+  23   1              _nop_();
+  24   1              _nop_();
+  25   1              i = 1;
+  26   1              while (--i);
+  27   1      }
+  28          
+  29          /**********************************************************
+  30          
+  31          检查LCD忙状态
+  32          
+  33          lcd_busy为1时，忙，等待。
+  34          lcd-busy为0时,闲，可写指令与数据。
+  35          
+  36           **********************************************************/
+  37          void lcd_busy()
+  38          {
+  39   1          int8u busy;
+  40   1          LCD_RS = 0;
+  41   1          LCD_RW = 1;
+  42   1          LCD_EN = 0;
+  43   1          while(1){
+  44   2                      Delay1us();
+  45   2              DATA_PORT=0xff;
+  46   2              LCD_EN=1;
+  47   2                      Delay1us();
+  48   2              busy = DATA_PORT;
+  49   2              LCD_EN = 0;
+  50   2              if((busy&0x80)==0){
+  51   3                  break;
+  52   3              }
+  53   2          }
+  54   1      }
+C51 COMPILER V9.57.0.0   LCD1602                                                           02/28/2024 15:57:01 PAGE 2   
+
+  55          
+  56          /**********************************************************
+  57          
+  58          写指令数据到LCD
+  59          
+  60          RS=L，RW=L，EN 下降沿执行写操作。D0-D7=指令码。
+  61          Check=1，进行忙检测。
+  62          
+  63           **********************************************************/
+  64          void lcd_wcmd(int8u cmd, bit Check)
+  65          {
+  66   1              int8u cmd_tmp;
+  67   1              // cmd_tmp=ByteTurn(cmd);
+  68   1              cmd_tmp=cmd;
+  69   1              if (Check)
+  70   1              lcd_busy();               //进行忙检测
+  71   1              LCD_EN = 0;
+  72   1              LCD_RS = 0;
+  73   1              LCD_RW = 0;
+  74   1              LCD_EN = 1;
+  75   1              DATA_PORT = cmd_tmp;
+  76   1              Delay1us();
+  77   1              LCD_EN = 0;
+  78   1      }
+  79          
+  80          /**********************************************************
+  81          
+  82          写显示数据到LCD
+  83          
+  84          RS=H，RW=L，EN 下降沿执行写操作。D0-D7=数据。
+  85          
+  86           **********************************************************/
+  87          void lcd_wdat(int8u dat)
+  88          {
+  89   1              int8u dat_tmp;
+  90   1              //dat_tmp=ByteTurn(dat);
+  91   1              dat_tmp=dat;
+  92   1              lcd_busy();         //进行忙检测
+  93   1              LCD_EN = 0;
+  94   1              LCD_RS = 1;
+  95   1              LCD_RW = 0;
+  96   1              LCD_EN = 1;
+  97   1              DATA_PORT = dat_tmp;
+  98   1              Delay1us();
+  99   1              LCD_EN = 0;
+ 100   1      }
+ 101          
+ 102          /**********************************************************
+ 103          
+ 104          LCD初始化设定
+ 105          
+ 106           **********************************************************/
+ 107          void lcd_init()
+ 108          {
+ 109   1        lcd_wcmd(0x38, 1); //进行忙检测
+ 110   1        lcd_wcmd(0x0c, 1); //显示开，关光标
+ 111   1        lcd_wcmd(0x06, 1); //移动光标
+ 112   1        lcd_wcmd(0x01, 1); //清除LCD的显示内容
+ 113   1      }
+ 114          
+ 115          /**********************************************************
+ 116          
+C51 COMPILER V9.57.0.0   LCD1602                                                           02/28/2024 15:57:01 PAGE 3   
+
+ 117          设定显示位置
+ 118          
+ 119           **********************************************************/
+ 120          void lcd_pos(int8u xpos, int8u ypos)
+ 121          {
+ 122   1        if (ypos == 0x01)
+ 123   1          lcd_wcmd((xpos | 0x80), 1);
+ 124   1        if (ypos == 0x02)
+ 125   1          lcd_wcmd((xpos | 0xc0), 1);
+ 126   1      }
+ 127          
+ 128          /**********************************************************
+ 129          
+ 130          写字符串子函数
+ 131          
+ 132           **********************************************************/
+ 133          void wr_string(int8u *p)
+ 134          {
+ 135   1        while (*p)
+ 136   1        {
+ 137   2          lcd_wdat(*p++);
+ 138   2        }
+ 139   1      }
+ 140          
+ 141          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    224    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----       3
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----       1
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

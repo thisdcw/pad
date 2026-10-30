@@ -1,0 +1,162 @@
+C51 COMPILER V9.57.0.0   E2PROM                                                            03/18/2024 15:31:20 PAGE 1   
+
+
+C51 COMPILER V9.57.0.0, COMPILATION OF MODULE E2PROM
+OBJECT MODULE PLACED IN .\Objects\e2prom.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE Source\e2prom.c OMF2 OPTIMIZE(8,SPEED) BROWSE INCDIR(.\Inc) DEBUG PRINT(
+                    -.\Listings\e2prom.lst) OBJECT(.\Objects\e2prom.obj)
+
+line level    source
+
+   1          /****************************Copyright (c)****************************
+   2          **                          技美电子工作室
+   3          **                     http://lintar.taobao.com 
+   4          **                  tel:13527786389  QQ:1049624740
+   5          **                  E-mail:lintar1368@126.com
+   6          **                    
+   7          **---------File Info--------------------------------------------------
+   8          **                     STC单片机片内E2PROM读写驱动程序
+   9          **                     (e2prom.c)
+  10          **    对e2prom进行写操作前，必须对扇区进行擦除操作；
+  11          **    故对e2prom内数据进行一次更新应执行读取，擦除，写入的操作；
+  12          **
+  13          **--------------------------------------------------------------------
+  14          ** Created by:          肖林发
+  15          ** Created date:        2010-9-6
+  16          ** Version:             V1.0
+  17          ** Descriptions:        原程序编写调试
+  18          **
+  19          *********************************************************************/
+  20                 
+  21          #include "e2prom.h"
+  22          
+  23          /*--------------------------------------
+  24          Disable ISP/IAP/EEPROM fuction
+  25          Make MCU in a safe state
+  26          ---------------------------------------*/
+  27          void IapIdle(void)
+  28          {
+  29   1              IAP_CONTR = 0;      //Close IAP function
+  30   1              IAP_CMD = 0;        //Clear command to standby
+  31   1              IAP_TRIG = 0;       //Clear trigger register
+  32   1              IAP_ADDRH = 0x80;   //Data ptr point to non-EEPROM area
+  33   1              IAP_ADDRL = 0x00;   //Clear IAP address to prevent misuse
+  34   1      }
+  35          
+  36          /*--------------------------------------
+  37          Read one byte from ISP/IAP/EEPROM area
+  38          Input: addr(ISP/IAP/EEPROM address)
+  39          Output: Flash data
+  40          ---------------------------------------*/
+  41          int8u IapReadByte(int16u addr)
+  42          {
+  43   1              int8u dat;                     //data buffer
+  44   1              F0=EA;
+  45   1              EA=0;
+  46   1              IAP_CONTR = ENABLE_IAP;        //Open IAP function and set wait time
+  47   1          IAP_TPS   =12;
+  48   1              IAP_CMD = CMD_READ;            //Set ISP/IAP/EEPROM READ command
+  49   1              IAP_ADDRL = (int8u)addr;       //Set ISP/IAP/EEPROM low address
+  50   1              IAP_ADDRH = (int8u)(addr>>8);  //Set ISP/IAP/EEPROM high address
+  51   1              IAP_TRIG = 0x5a;               //Send trigger command1(0x5a)
+  52   1              IAP_TRIG = 0xa5;               //Send trigger command2(0xa5)
+  53   1              _nop_();                       //MCU will hold here until ISP/IAP/EEPROM operation complete
+  54   1              dat = IAP_DATA;                //Read ISP/IAP/EEPROM data
+C51 COMPILER V9.57.0.0   E2PROM                                                            03/18/2024 15:31:20 PAGE 2   
+
+  55   1              IapIdle();                     //Close ISP/IAP/EEPROM function
+  56   1              EA=F0;
+  57   1              return dat;                    //Return Flash data
+  58   1      }
+  59          
+  60          /*--------------------------------------
+  61          Write one byte to ISP/IAP/EEPROM area
+  62          Input: addr(ISP/IAP/EEPROM address) 
+  63                 dat(ISP/IAP/EEPROM data)
+  64          Output: non
+  65          ---------------------------------------*/
+  66          void IapWriteByte(int16u addr,int8u dat)
+  67          {
+  68   1              F0=EA;
+  69   1              EA=0;
+  70   1              IAP_CONTR = ENABLE_IAP;        //Open IAP function and set wait time
+  71   1          IAP_TPS   =12;
+  72   1              IAP_CMD = CMD_WRITE;           //Set ISP/IAP/EEPROM write command
+  73   1              IAP_ADDRL = (int8u)addr;       //Set ISP/IAP/EEPROM low address
+  74   1              IAP_ADDRH = (int8u)(addr>>8);  //Set ISP/IAP/EEPROM high address
+  75   1              IAP_DATA = dat;                //Write ISP/IAP/EEPROM data
+  76   1              IAP_TRIG = 0x5a;               //Send trigger command1(0x5a)
+  77   1              IAP_TRIG = 0xa5;               //Send trigger command2(0xa5)
+  78   1              _nop_();                       //MCU will hold here until ISP/IAP/EEPROM operation complete
+  79   1              IapIdle();                     //Close ISP/IAP/EEPROM function
+  80   1              EA=F0;
+  81   1      }
+  82          
+  83          /*--------------------------------------
+  84          Erase one sector area
+  85          Input: addr(ISP/IAP/EEPROM address)
+  86          Output: non
+  87          --------------------------------------*/
+  88          void IapEraseSector(int16u addr)
+  89          {
+  90   1              F0=EA;
+  91   1              EA=0;
+  92   1              IAP_CONTR = ENABLE_IAP;        //Open IAP function and set wait time
+  93   1          IAP_TPS   =12;
+  94   1              IAP_CMD = CMD_ERASE;           //Set ISP/IAP/EEPROM erase command
+  95   1              IAP_ADDRL = (int8u)addr;       //Set ISP/IAP/EEPROM low address
+  96   1              IAP_ADDRH = (int8u)(addr>>8);  //Set ISP/IAP/EEPROM high address
+  97   1              IAP_TRIG = 0x5a;               //Send trigger command1(0x5a)
+  98   1              IAP_TRIG = 0xa5;               //Send trigger command2(0xa5)
+  99   1              _nop_();                       //MCU will hold here until ISP/IAP/EEPROM operation complete
+ 100   1              IapIdle();                     //Close ISP/IAP/EEPROM function
+ 101   1              EA=F0;
+ 102   1      }
+ 103          
+ 104          /***************************存取字数*************************/
+ 105          //四个字节
+ 106           /********************************************************************
+ 107          函数：STC 向指定地址写一字数据
+ 108          ********************************************************************/
+ 109          void EROM_write_word(int16u addr,  int32u dat)
+ 110          {     
+ 111   1          IapWriteByte(addr++, ((int8u *)&dat)[0]); 
+ 112   1          IapWriteByte(addr++, ((int8u *)&dat)[1]); 
+ 113   1          IapWriteByte(addr++, ((int8u *)&dat)[2]); 
+ 114   1          IapWriteByte(addr,   ((int8u *)&dat)[3]);   
+ 115   1      }
+ 116          
+C51 COMPILER V9.57.0.0   E2PROM                                                            03/18/2024 15:31:20 PAGE 3   
+
+ 117          /********************************************************************
+ 118          函数：STC 读指定地址一字数据        
+ 119          ********************************************************************/
+ 120          int32u EROM_read_word(int16u addr)
+ 121          {                      
+ 122   1          int32u dat;
+ 123   1       
+ 124   1          ((int8u *)&dat)[0] = IapReadByte(addr++);
+ 125   1          ((int8u *)&dat)[1] = IapReadByte(addr++);
+ 126   1          ((int8u *)&dat)[2] = IapReadByte(addr++);
+ 127   1          ((int8u *)&dat)[3] = IapReadByte(addr);
+ 128   1       
+ 129   1          return dat;                        
+ 130   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    232    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----      10
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
